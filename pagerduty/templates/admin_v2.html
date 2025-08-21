@@ -1,0 +1,396 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Admin - PagerDuty Dashboard v2{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="fw-bold text-primary">
+            <i class="fas fa-cog me-3"></i>
+            Administration Panel
+        </h1>
+        <p class="text-muted fs-5">Manage incident data updates and system monitoring</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Data Update Section -->
+    <div class="col-lg-8">
+        <div class="admin-section">
+            <h3 class="fw-bold mb-3">
+                <i class="fas fa-sync-alt text-primary me-2"></i>
+                Incident Data Update
+            </h3>
+            <p class="text-muted mb-4">
+                Fetch the latest incident data from PagerDuty API and update the local database. 
+                This process checks escalation status for each incident by examining log entries.
+            </p>
+            
+            <div class="update-controls">
+                <div class="form-group">
+                    <label for="updateDays" class="form-label fw-bold">Number of Days</label>
+                    <select class="form-select form-select-lg" id="updateDays">
+                        <option value="1">Last 1 day</option>
+                        <option value="2">Last 2 days</option>
+                        <option value="3" selected>Last 3 days</option>
+                        <option value="5">Last 5 days</option>
+                        <option value="7">Last 7 days (Maximum)</option>
+                    </select>
+                    <div class="form-text">
+                        Select how many days of incident data to fetch. Maximum 7 days allowed.
+                    </div>
+                </div>
+                
+                <div>
+                    <button id="updateBtn" class="btn btn-primary btn-lg px-4">
+                        <i class="fas fa-download me-2"></i>
+                        Start Update
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Section -->
+            <div id="progressSection" class="progress-section" style="display: none;">
+                <div class="alert alert-info">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <div>
+                            <strong id="progressTitle">Updating incident data...</strong>
+                            <div class="small" id="progressMessage">Please wait while we fetch and process the data.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="progress mb-2" style="height: 10px;">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="small text-muted" id="progressText">Initializing...</div>
+            </div>
+
+            <!-- Result Section -->
+            <div id="resultSection" style="display: none;"></div>
+            
+            <!-- Log Output -->
+            <div id="logSection" style="display: none;">
+                <h5 class="mt-4 fw-bold">Command Output</h5>
+                <div class="bg-dark text-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">
+                    <pre id="logOutput" class="mb-0 small"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Information -->
+    <div class="col-lg-4">
+        <!-- System Stats -->
+        <div class="admin-section">
+            <h3 class="fw-bold mb-3">
+                <i class="fas fa-chart-pie text-success me-2"></i>
+                System Statistics
+            </h3>
+            
+            <div id="systemStats">
+                <div class="loading-spinner">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Loading statistics...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="admin-section">
+            <h3 class="fw-bold mb-3">
+                <i class="fas fa-bolt text-warning me-2"></i>
+                Quick Actions
+            </h3>
+            
+            <div class="d-grid gap-2">
+                <button class="btn btn-outline-primary" onclick="refreshStats()">
+                    <i class="fas fa-refresh me-2"></i>
+                    Refresh Statistics
+                </button>
+                <button class="btn btn-outline-secondary" onclick="window.open('/', '_blank')">
+                    <i class="fas fa-external-link-alt me-2"></i>
+                    Open Dashboard
+                </button>
+                <button class="btn btn-outline-info" onclick="downloadSystemReport()">
+                    <i class="fas fa-download me-2"></i>
+                    Download Report
+                </button>
+            </div>
+        </div>
+
+        <!-- Command Reference -->
+        <div class="admin-section">
+            <h3 class="fw-bold mb-3">
+                <i class="fas fa-terminal text-info me-2"></i>
+                Command Reference
+            </h3>
+            
+            <div class="small">
+                <div class="mb-3 p-2 bg-light rounded">
+                    <code class="text-primary">python3 main_v2.py --update-incidents X</code>
+                    <div class="text-muted mt-1">Update incidents for last X days</div>
+                </div>
+                <div class="mb-3 p-2 bg-light rounded">
+                    <code class="text-primary">python3 main_v2.py --show-summary X</code>
+                    <div class="text-muted mt-1">Show summary for last X days</div>
+                </div>
+                <div class="mb-3 p-2 bg-light rounded">
+                    <code class="text-primary">python3 main_v2.py --show-escalations</code>
+                    <div class="text-muted mt-1">Show escalated incidents only</div>
+                </div>
+                <div class="mb-3 p-2 bg-light rounded">
+                    <code class="text-primary">python3 main_v2.py --database-info</code>
+                    <div class="text-muted mt-1">Show database statistics</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+class AdminPanel {
+    constructor() {
+        this.updateInProgress = false;
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.loadSystemStats();
+    }
+
+    setupEventListeners() {
+        document.getElementById('updateBtn').addEventListener('click', () => {
+            this.startUpdate();
+        });
+    }
+
+    async loadSystemStats() {
+        try {
+            const response = await fetch('/api/stats');
+            if (!response.ok) throw new Error('Failed to load statistics');
+            
+            const stats = await response.json();
+            this.displaySystemStats(stats);
+        } catch (error) {
+            console.error('Error loading statistics:', error);
+            document.getElementById('systemStats').innerHTML = `
+                <div class="text-danger text-center">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading statistics
+                </div>
+            `;
+        }
+    }
+
+    displaySystemStats(stats) {
+        const statsContainer = document.getElementById('systemStats');
+        statsContainer.innerHTML = `
+            <div class="row g-3">
+                <div class="col-6">
+                    <div class="card bg-primary text-white text-center">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold">${Utils.formatNumber(stats.total_incidents)}</div>
+                            <div class="small">Total Incidents</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card bg-success text-white text-center">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold">${stats.services_count}</div>
+                            <div class="small">Services</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card bg-warning text-white text-center">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold">${Utils.formatNumber(stats.incidents_last_7_days)}</div>
+                            <div class="small">Last 7 Days</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card bg-danger text-white text-center">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold">${Utils.formatNumber(stats.escalated_last_7_days)}</div>
+                            <div class="small">Escalated (7d)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3 text-center small text-muted">
+                <i class="fas fa-clock me-1"></i>
+                Updated: ${new Date(stats.last_updated).toLocaleString()}
+            </div>
+        `;
+    }
+
+    async startUpdate() {
+        if (this.updateInProgress) return;
+
+        const days = parseInt(document.getElementById('updateDays').value);
+        const updateBtn = document.getElementById('updateBtn');
+        const progressSection = document.getElementById('progressSection');
+        const resultSection = document.getElementById('resultSection');
+        const logSection = document.getElementById('logSection');
+
+        // Reset UI
+        this.updateInProgress = true;
+        updateBtn.disabled = true;
+        updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Updating...';
+        
+        progressSection.style.display = 'block';
+        resultSection.style.display = 'none';
+        logSection.style.display = 'none';
+
+        // Start progress simulation
+        this.simulateProgress();
+
+        try {
+            const response = await fetch('/api/admin/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ days: days })
+            });
+
+            const result = await response.json();
+
+            // Hide progress and show result
+            progressSection.style.display = 'none';
+            resultSection.style.display = 'block';
+
+            if (result.success) {
+                resultSection.innerHTML = `
+                    <div class="alert alert-success">
+                        <h5 class="fw-bold">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Update Completed Successfully!
+                        </h5>
+                        <p class="mb-2">${result.message}</p>
+                        <div class="small">
+                            <strong>Period:</strong> Last ${result.days} days<br>
+                            <strong>Status:</strong> All incident data has been updated
+                        </div>
+                    </div>
+                `;
+
+                // Show log output
+                if (result.output) {
+                    logSection.style.display = 'block';
+                    document.getElementById('logOutput').textContent = result.output;
+                }
+
+                // Refresh stats after successful update
+                setTimeout(() => {
+                    this.loadSystemStats();
+                }, 2000);
+
+                Utils.showAlert('Incident data updated successfully!', 'success');
+
+            } else {
+                resultSection.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5 class="fw-bold">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Update Failed
+                        </h5>
+                        <p class="mb-2">${result.message}</p>
+                        ${result.error ? `
+                            <details class="mt-3">
+                                <summary class="fw-bold">Error Details</summary>
+                                <pre class="small mt-2 bg-light p-2 rounded">${result.error}</pre>
+                            </details>
+                        ` : ''}
+                    </div>
+                `;
+
+                Utils.showAlert('Failed to update incident data', 'danger');
+            }
+
+        } catch (error) {
+            console.error('Update error:', error);
+            
+            progressSection.style.display = 'none';
+            resultSection.style.display = 'block';
+            resultSection.innerHTML = `
+                <div class="alert alert-danger">
+                    <h5 class="fw-bold">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Network Error
+                    </h5>
+                    <p class="mb-0">Failed to communicate with server: ${error.message}</p>
+                </div>
+            `;
+
+            Utils.showAlert('Network error during update', 'danger');
+
+        } finally {
+            this.updateInProgress = false;
+            updateBtn.disabled = false;
+            updateBtn.innerHTML = '<i class="fas fa-download me-2"></i>Start Update';
+        }
+    }
+
+    simulateProgress() {
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const progressTitle = document.getElementById('progressTitle');
+        const progressMessage = document.getElementById('progressMessage');
+        
+        const steps = [
+            { progress: 15, title: 'Initializing...', message: 'Starting API client and loading configuration' },
+            { progress: 25, title: 'Loading Services...', message: 'Reading PagerDuty service configuration' },
+            { progress: 40, title: 'Fetching Incidents...', message: 'Retrieving incidents from PagerDuty API' },
+            { progress: 60, title: 'Checking Escalations...', message: 'Examining log entries for escalation status' },
+            { progress: 80, title: 'Processing Data...', message: 'Converting and validating incident data' },
+            { progress: 95, title: 'Updating Database...', message: 'Storing incidents and calculating summaries' },
+            { progress: 100, title: 'Complete!', message: 'All incident data has been updated successfully' }
+        ];
+
+        let stepIndex = 0;
+        const interval = setInterval(() => {
+            if (stepIndex < steps.length && this.updateInProgress) {
+                const step = steps[stepIndex];
+                progressBar.style.width = step.progress + '%';
+                progressText.textContent = `${step.progress}% complete`;
+                progressTitle.textContent = step.title;
+                progressMessage.textContent = step.message;
+                stepIndex++;
+            } else {
+                clearInterval(interval);
+            }
+        }, 3000);
+    }
+}
+
+// Global functions
+function refreshStats() {
+    window.adminPanel.loadSystemStats();
+    Utils.showAlert('Statistics refreshed', 'info');
+}
+
+function downloadSystemReport() {
+    // This would typically generate and download a system report
+    Utils.showAlert('System report feature coming soon!', 'info');
+}
+
+// Initialize admin panel
+document.addEventListener('DOMContentLoaded', () => {
+    window.adminPanel = new AdminPanel();
+});
+</script>
+{% endblock %}

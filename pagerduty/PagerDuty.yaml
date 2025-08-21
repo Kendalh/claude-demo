@@ -1,0 +1,14 @@
+token: u+61MTPh5pwWQ6r-My4Q
+services:
+  - name: 9647 - Touchstone Reporting Support Service
+    url: https://ebay-cpt.pagerduty.com/service-directory/PVT5IW4
+  - name: 9664 - Touchstone On Call Service
+    url: https://ebay-cpt.pagerduty.com/service-directory/PY23FJQ
+  - name: 1690 - Sojourner SLA Service
+    url: https://ebay-cpt.pagerduty.com/service-directory/PHMCGNE
+  - name: Customer Journey Signals
+    url: https://ebay-cpt.pagerduty.com/service-directory/P0CAL62
+  - name: 1092 - Tracking CCOE High Priority
+    url: https://ebay-cpt.pagerduty.com/service-directory/PHZ57RZ
+  - name: Product Analytics
+    url: https://ebay-cpt.pagerduty.com/service-directory/PJFLEB2

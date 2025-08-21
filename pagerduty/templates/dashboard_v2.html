@@ -1,0 +1,548 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Dashboard - PagerDuty v2{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="fw-bold text-primary">
+            <i class="fas fa-chart-bar me-3"></i>
+            Incident Dashboard
+        </h1>
+        <p class="text-muted fs-5">Monitor and analyze incidents across all PagerDuty services</p>
+    </div>
+</div>
+
+<!-- Loading State -->
+<div id="loadingState" class="text-center py-5">
+    <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <h5 class="text-muted">Loading services and incident data...</h5>
+</div>
+
+<!-- Dashboard Content -->
+<div id="dashboardContent" style="display: none;">
+    <!-- Service Tabs -->
+    <div class="card mb-4">
+        <div class="card-body p-0">
+            <ul class="nav nav-tabs" id="serviceTabs" role="tablist">
+                <!-- Service tabs will be generated here -->
+            </ul>
+            
+            <div class="tab-content p-4" id="serviceTabContent">
+                <!-- Tab content will be generated here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Service Tab Template -->
+<template id="serviceTabTemplate">
+    <div class="service-tab-content">
+        <!-- Period Selector -->
+        <div class="period-selector">
+            <button class="period-btn active" data-period="7">
+                <i class="fas fa-calendar-week me-1"></i>
+                Last 7 Days
+            </button>
+            <button class="period-btn" data-period="30">
+                <i class="fas fa-calendar-alt me-1"></i>
+                Last 30 Days
+            </button>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card border-primary">
+                    <div class="summary-value text-primary total-incidents">0</div>
+                    <div class="summary-label">Total Incidents</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card border-warning">
+                    <div class="summary-value text-warning triggered-incidents">0</div>
+                    <div class="summary-label">Triggered but not Resolved</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card border-success">
+                    <div class="summary-value text-success resolved-incidents">0</div>
+                    <div class="summary-label">Resolved</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card border-danger">
+                    <div class="summary-value text-danger escalated-incidents">0</div>
+                    <div class="summary-label">Escalated</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card border-info">
+                    <div class="summary-value text-info ccoe-resolved-incidents">0</div>
+                    <div class="summary-label">CCOE Resolved</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card summary-card border-dark">
+                    <div class="summary-value text-dark infrastructure-caused-incidents">0</div>
+                    <div class="summary-label">Infrastructure Caused</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart and Calendar Row -->
+        <div class="row">
+            <!-- Trend Chart -->
+            <div class="col-lg-5 mb-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-line me-2"></i>
+                            Incident Trends
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas class="trend-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Calendar View -->
+            <div class="col-lg-7 mb-4">
+                <div class="calendar-container">
+                    <div class="calendar-header">
+                        <button class="calendar-nav-btn prev-month">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <h4 class="mb-0 fw-bold current-month-year"></h4>
+                        <button class="calendar-nav-btn next-month">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="calendar-grid">
+                        <!-- Calendar headers -->
+                        <div class="calendar-header-day">Sun</div>
+                        <div class="calendar-header-day">Mon</div>
+                        <div class="calendar-header-day">Tue</div>
+                        <div class="calendar-header-day">Wed</div>
+                        <div class="calendar-header-day">Thu</div>
+                        <div class="calendar-header-day">Fri</div>
+                        <div class="calendar-header-day">Sat</div>
+                        
+                        <!-- Calendar days will be added here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+class PagerDutyDashboard {
+    constructor() {
+        this.services = {};
+        this.currentDate = new Date();
+        this.charts = {};
+        this.currentPeriods = {}; // Track active period for each service
+        this.currentPopup = null; // Track current escalation popup
+        this.init();
+    }
+
+    async init() {
+        try {
+            await this.loadServices();
+            this.createServiceTabs();
+            this.showDashboard();
+        } catch (error) {
+            console.error('Dashboard initialization error:', error);
+            Utils.showAlert('Failed to load dashboard. Please check your data.', 'danger');
+        }
+    }
+
+    async loadServices() {
+        const response = await fetch('/api/services');
+        if (!response.ok) throw new Error('Failed to load services');
+        this.services = await response.json();
+    }
+
+    showDashboard() {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('dashboardContent').style.display = 'block';
+    }
+
+    createServiceTabs() {
+        const tabsContainer = document.getElementById('serviceTabs');
+        const contentContainer = document.getElementById('serviceTabContent');
+        
+        let isFirst = true;
+        for (const [serviceId, serviceData] of Object.entries(this.services)) {
+            // Create tab
+            const tabItem = document.createElement('li');
+            tabItem.className = 'nav-item';
+            tabItem.innerHTML = `
+                <button class="nav-link ${isFirst ? 'active' : ''}" 
+                        id="tab-${serviceId}" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#content-${serviceId}" 
+                        type="button">
+                    <i class="fas fa-server me-2"></i>
+                    ${serviceData.name}
+                </button>
+            `;
+            tabsContainer.appendChild(tabItem);
+
+            // Create tab content
+            const template = document.getElementById('serviceTabTemplate');
+            const content = template.content.cloneNode(true);
+            
+            const tabPane = document.createElement('div');
+            tabPane.className = `tab-pane fade ${isFirst ? 'show active' : ''}`;
+            tabPane.id = `content-${serviceId}`;
+            tabPane.setAttribute('data-service-id', serviceId);
+            tabPane.appendChild(content);
+            
+            contentContainer.appendChild(tabPane);
+
+            // Setup event listeners
+            this.setupTabEvents(serviceId);
+            
+            // Initialize with 7-day period
+            this.currentPeriods[serviceId] = 7;
+            
+            // Load initial data
+            this.loadServiceData(serviceId);
+            
+            isFirst = false;
+        }
+    }
+
+    setupTabEvents(serviceId) {
+        const tabPane = document.getElementById(`content-${serviceId}`);
+        
+        // Period selector buttons
+        tabPane.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const period = parseInt(e.target.dataset.period);
+                this.changePeriod(serviceId, period);
+            });
+        });
+
+        // Calendar navigation
+        tabPane.querySelector('.prev-month').addEventListener('click', () => {
+            this.changeMonth(serviceId, -1);
+        });
+
+        tabPane.querySelector('.next-month').addEventListener('click', () => {
+            this.changeMonth(serviceId, 1);
+        });
+    }
+
+    async loadServiceData(serviceId) {
+        const period = this.currentPeriods[serviceId];
+        
+        try {
+            // Load all data in parallel
+            await Promise.all([
+                this.loadSummaryData(serviceId, period),
+                this.loadTrendData(serviceId, period),
+                this.loadCalendarData(serviceId)
+            ]);
+        } catch (error) {
+            console.error(`Error loading data for service ${serviceId}:`, error);
+            Utils.showAlert(`Failed to load data for ${this.services[serviceId].name}`, 'warning');
+        }
+    }
+
+    async loadSummaryData(serviceId, period) {
+        const response = await fetch(`/api/service/${serviceId}/summary?days=${period}`);
+        if (!response.ok) throw new Error('Failed to load summary data');
+        
+        const data = await response.json();
+        const tabPane = document.getElementById(`content-${serviceId}`);
+        
+        tabPane.querySelector('.total-incidents').textContent = Utils.formatNumber(data.total_incidents);
+        tabPane.querySelector('.triggered-incidents').textContent = Utils.formatNumber(data.triggered_incidents);
+        tabPane.querySelector('.resolved-incidents').textContent = Utils.formatNumber(data.resolved_incidents);
+        tabPane.querySelector('.escalated-incidents').textContent = Utils.formatNumber(data.escalated_incidents);
+        tabPane.querySelector('.ccoe-resolved-incidents').textContent = Utils.formatNumber(data.ccoe_resolved_incidents);
+        tabPane.querySelector('.infrastructure-caused-incidents').textContent = Utils.formatNumber(data.infrastructure_caused_incidents);
+    }
+
+    async loadTrendData(serviceId, period) {
+        const response = await fetch(`/api/service/${serviceId}/trends?days=${period}`);
+        if (!response.ok) throw new Error('Failed to load trend data');
+        
+        const data = await response.json();
+        this.updateTrendChart(serviceId, data);
+    }
+
+    updateTrendChart(serviceId, trendData) {
+        const tabPane = document.getElementById(`content-${serviceId}`);
+        const canvas = tabPane.querySelector('.trend-chart');
+        const ctx = canvas.getContext('2d');
+
+        // Destroy existing chart
+        if (this.charts[serviceId]) {
+            this.charts[serviceId].destroy();
+        }
+
+        // Prepare data
+        const labels = trendData.map(d => Utils.formatDate(d.date));
+        
+        this.charts[serviceId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Total',
+                    data: trendData.map(d => d.total),
+                    borderColor: '#0066cc',
+                    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Triggered',
+                    data: trendData.map(d => d.triggered),
+                    borderColor: '#fd7e14',
+                    backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Resolved',
+                    data: trendData.map(d => d.resolved),
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Escalated',
+                    data: trendData.map(d => d.escalated),
+                    borderColor: '#dc3545',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'CCOE Resolved',
+                    data: trendData.map(d => d.ccoe_resolved),
+                    borderColor: '#17a2b8',
+                    backgroundColor: 'rgba(23, 162, 184, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Infrastructure',
+                    data: trendData.map(d => d.infrastructure_caused),
+                    borderColor: '#6c757d',
+                    backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        },
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)'
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    }
+
+    async loadCalendarData(serviceId) {
+        const year = this.currentDate.getFullYear();
+        const month = this.currentDate.getMonth() + 1;
+        
+        const response = await fetch(`/api/service/${serviceId}/calendar?year=${year}&month=${month}`);
+        if (!response.ok) throw new Error('Failed to load calendar data');
+        
+        const calendarData = await response.json();
+        this.updateCalendar(serviceId, calendarData);
+    }
+
+    setupEscalationPopups(serviceId) {
+        const tabPane = document.getElementById(`content-${serviceId}`);
+        
+        // Remove existing event listeners
+        tabPane.querySelectorAll('.count-escalated').forEach(badge => {
+            badge.removeEventListener('mouseenter', this.showEscalationPopup);
+            badge.removeEventListener('mouseleave', this.hideEscalationPopup);
+        });
+        
+        // Add new event listeners
+        tabPane.querySelectorAll('.count-escalated').forEach(badge => {
+            badge.addEventListener('mouseenter', this.showEscalationPopup.bind(this));
+            badge.addEventListener('mouseleave', this.hideEscalationPopup.bind(this));
+        });
+    }
+
+    showEscalationPopup(event) {
+        const badge = event.target;
+        const escalatedData = JSON.parse(badge.dataset.escalated || '[]');
+        
+        if (escalatedData.length === 0) return;
+
+        // Remove any existing popup
+        this.hideEscalationPopup();
+
+        const popup = document.createElement('div');
+        popup.className = 'escalation-popup';
+        popup.innerHTML = `
+            <h6><i class="fas fa-exclamation-triangle me-1"></i>Escalated Incidents</h6>
+            ${escalatedData.map(incident => `
+                <a href="${incident.html_url}" target="_blank" class="incident-link">
+                    <span class="incident-title">${incident.title}</span>
+                    <span class="incident-meta">
+                        ${incident.urgency.toUpperCase()} • ${incident.status.toUpperCase()}
+                    </span>
+                </a>
+            `).join('')}
+        `;
+
+        badge.appendChild(popup);
+        popup.style.display = 'block';
+        
+        // Store reference for cleanup
+        this.currentPopup = popup;
+    }
+
+    hideEscalationPopup(event) {
+        if (this.currentPopup) {
+            this.currentPopup.remove();
+            this.currentPopup = null;
+        }
+    }
+
+    updateCalendar(serviceId, calendarData) {
+        const tabPane = document.getElementById(`content-${serviceId}`);
+        const calendarGrid = tabPane.querySelector('.calendar-grid');
+        const monthYearElement = tabPane.querySelector('.current-month-year');
+        
+        // Update month/year display
+        const monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        monthYearElement.textContent = `${monthNames[this.currentDate.getMonth()]} ${this.currentDate.getFullYear()}`;
+        
+        // Remove existing calendar days (keep headers)
+        const existingDays = calendarGrid.querySelectorAll('.calendar-day');
+        existingDays.forEach(day => day.remove());
+        
+        // Generate calendar
+        const year = this.currentDate.getFullYear();
+        const month = this.currentDate.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const startDate = new Date(firstDay);
+        startDate.setDate(startDate.getDate() - firstDay.getDay());
+
+        let currentDate = new Date(startDate);
+        
+        // Generate 6 weeks of days
+        for (let week = 0; week < 6; week++) {
+            for (let day = 0; day < 7; day++) {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                
+                const isCurrentMonth = currentDate.getMonth() === month;
+                if (!isCurrentMonth) {
+                    dayElement.classList.add('other-month');
+                }
+                
+                const dateStr = currentDate.toISOString().split('T')[0];
+                const dayData = calendarData[dateStr] || { 
+                    total: 0, triggered: 0, resolved: 0, escalated: 0, ccoe_resolved: 0, infrastructure_caused: 0, escalated_incidents: []
+                };
+                
+                if (dayData.total > 0) {
+                    dayElement.classList.add('has-incidents');
+                }
+                if (dayData.escalated > 0) {
+                    dayElement.classList.add('has-escalations');
+                }
+                
+                dayElement.innerHTML = `
+                    <div class="day-number">${currentDate.getDate()}</div>
+                    ${dayData.total > 0 ? `
+                        <div class="incident-counts">
+                            <div class="count-badge count-total">${dayData.total}</div>
+                            ${dayData.triggered > 0 ? `<div class="count-badge count-triggered">${dayData.triggered}</div>` : ''}
+                            ${dayData.resolved > 0 ? `<div class="count-badge count-resolved">${dayData.resolved}</div>` : ''}
+                            ${dayData.escalated > 0 ? `
+                                <div class="count-badge count-escalated" data-escalated='${JSON.stringify(dayData.escalated_incidents)}'>${dayData.escalated} !</div>
+                            ` : ''}
+                            ${dayData.ccoe_resolved > 0 ? `<div class="count-badge count-ccoe">${dayData.ccoe_resolved} C</div>` : ''}
+                            ${dayData.infrastructure_caused > 0 ? `<div class="count-badge count-infra">${dayData.infrastructure_caused} I</div>` : ''}
+                        </div>
+                    ` : ''}
+                `;
+                
+                calendarGrid.appendChild(dayElement);
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            // Stop if we've gone past the current month and filled at least 4 weeks
+            if (currentDate.getMonth() !== month && week >= 3) break;
+        }
+        
+        // Setup escalation popups after calendar is rendered
+        this.setupEscalationPopups(serviceId);
+    }
+
+    changePeriod(serviceId, newPeriod) {
+        const tabPane = document.getElementById(`content-${serviceId}`);
+        
+        // Update button states
+        tabPane.querySelectorAll('.period-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (parseInt(btn.dataset.period) === newPeriod) {
+                btn.classList.add('active');
+            }
+        });
+        
+        this.currentPeriods[serviceId] = newPeriod;
+        
+        // Reload summary and trend data
+        this.loadSummaryData(serviceId, newPeriod);
+        this.loadTrendData(serviceId, newPeriod);
+    }
+
+    changeMonth(serviceId, direction) {
+        this.currentDate.setMonth(this.currentDate.getMonth() + direction);
+        this.loadCalendarData(serviceId);
+    }
+}
+
+// Initialize dashboard when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    new PagerDutyDashboard();
+});
+</script>
+{% endblock %}
