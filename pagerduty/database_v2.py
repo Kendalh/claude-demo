@@ -178,7 +178,7 @@ class IncidentDatabase:
             
             query = """
                 SELECT * FROM incidents 
-                WHERE DATE(created_at) BETWEEN ? AND ?
+                WHERE substr(created_at, 1, 10) BETWEEN ? AND ?
             """
             params = [start_date, end_date]
             

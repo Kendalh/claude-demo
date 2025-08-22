@@ -80,9 +80,16 @@ class Incident:
     def get_date_str_utc_minus_7(self) -> str:
         """Get incident date in UTC-7 timezone as string"""
         from datetime import timezone, timedelta
-        utc_minus_7 = timezone(timedelta(hours=-7))
-        local_time = self.created_at.astimezone(utc_minus_7)
-        return local_time.date().isoformat()
+        
+        # If the datetime is already timezone-aware, use it directly
+        if self.created_at.tzinfo is not None:
+            # Convert to UTC-7 timezone
+            utc_minus_7 = timezone(timedelta(hours=-7))
+            local_time = self.created_at.astimezone(utc_minus_7)
+            return local_time.date().isoformat()
+        else:
+            # If naive datetime, assume it's already in UTC-7
+            return self.created_at.date().isoformat()
     
     def is_triggered_or_acknowledged(self) -> bool:
         """Check if incident is in triggered or acknowledged state"""

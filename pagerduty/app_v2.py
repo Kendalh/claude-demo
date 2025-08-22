@@ -79,10 +79,18 @@ def api_service_calendar(service_id):
             service_id
         )
         
-        # Group incidents by date
+        # Group incidents by date using the created_at timestamp directly
         calendar_data = {}
         for incident in incidents:
-            incident_date = incident.get_date_str_utc_minus_7()
+            # Extract date directly from the created_at timestamp
+            if incident.created_at.tzinfo is not None:
+                # Convert timezone-aware datetime to UTC-7
+                utc_minus_7 = timezone(timedelta(hours=-7))
+                local_time = incident.created_at.astimezone(utc_minus_7)
+                incident_date = local_time.date().isoformat()
+            else:
+                # For naive datetime, assume it's already in the local timezone
+                incident_date = incident.created_at.date().isoformat()
             
             if incident_date not in calendar_data:
                 calendar_data[incident_date] = {
@@ -180,10 +188,18 @@ def api_service_trends(service_id):
         db = IncidentDatabase()
         incidents = db.get_incidents_last_x_days(days, service_id)
         
-        # Group by date
+        # Group by date using the created_at timestamp directly
         daily_data = {}
         for incident in incidents:
-            incident_date = incident.get_date_str_utc_minus_7()
+            # Extract date directly from the created_at timestamp
+            if incident.created_at.tzinfo is not None:
+                # Convert timezone-aware datetime to UTC-7
+                utc_minus_7 = timezone(timedelta(hours=-7))
+                local_time = incident.created_at.astimezone(utc_minus_7)
+                incident_date = local_time.date().isoformat()
+            else:
+                # For naive datetime, assume it's already in the local timezone
+                incident_date = incident.created_at.date().isoformat()
             
             if incident_date not in daily_data:
                 daily_data[incident_date] = {

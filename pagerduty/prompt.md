@@ -1,5 +1,5 @@
 You have messed things up. Please create a brand new project code base, and mark all the files surfaced as _v2. 
-1) Have a centralized Incident Object class as data transfer object between the PagerDuty APIs and Database update/retrival object. This object should have key incident information like ID, name, status, and a label indicates whether the incident has ever been escalated. This class should not have any functions talking to database or pagerduty APIs.
+1) Have a centralized Incident Object class as data transfer object between the PagerDuty APIs and Database update/retrival calls. This object should have key incident information like ID, name, status, and a label indicates whether the incident has ever been escalated. This class should not have any functions talking to database or pagerduty APIs.
 2) Have a centralized PagerDuty API client, that feteches incidents from the services interested (honors the PagerDuty.yaml) for the previous X days (GTC-7 timezone). For each incident make sure to have another call to get log_entries, and from the log_entries if we have activities typed as "escalate_log_entry", mark the incident as escalated. This client should marshall the API response into the Incident Object. 
 3) Have a centralized database access layer. Store and fetch Incident Objects through the database. 
 4) Have a centralized data analysis layer that create metrics as needed. This layer issues SQL queries into the database and calcuate metrics like "total triggered incident in the last X days", "total excalated incidents in the last X days", etc...
@@ -21,3 +21,7 @@ Add a new feature of adding two more metrics: Incidents that resolved by CCOE; I
 2) Extend the Incident object, the corresponding database, etc... to include the two new attributes. 
 3) Add new metrics that calculate "Incidents that resolved by CCOE" and "Incident caused by Infrastructure issue".
 4) Change UI (calendar entry, metric labels, chart) to include these two new metrics
+
+
+Make changes to the incident entries inserted into the incident table, make sure the create_at, resolved_at, updated_at are stored as UTC-7 time. 
+On the UI calendar date and any summary metrics also make sure the date align with the date of the incident's created_at date.
