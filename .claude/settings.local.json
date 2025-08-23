@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp__playwright__browser_type",
-      "mcp__playwright__browser_click"
+      "mcp__playwright__browser_click",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []

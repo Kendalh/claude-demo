@@ -99,7 +99,9 @@ Service IDs are extracted from URLs using regex pattern: `/([A-Z0-9]{7})$/`
 - Chart.js for trend visualization
 - Custom calendar grid with escalation popups
 
-## Development Patterns
+## Development Patterns 
+Make sure when you add features, make according changes to the test cases and README file. Run the tests and fix the failure ones. 
+Don't overwelming the README, just add major features and make it concise. 
 
 ### Error Handling
 - All API calls include retry logic with exponential backoff
@@ -114,7 +116,7 @@ Service IDs are extracted from URLs using regex pattern: `/([A-Z0-9]{7})$/`
 5. **Present**: JSON API + HTML dashboard
 
 ### Testing Approach
-Use `--get-incident INCIDENT_ID` to inspect individual incident processing and verify custom field parsing.
+Use `--get-incident INCIDENT_ID` to inspect individual incident processing and verify custom field parsing. 
 
 ## Performance Considerations
 
