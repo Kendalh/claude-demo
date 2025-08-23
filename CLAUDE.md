@@ -50,6 +50,7 @@ PagerDuty API → Client Layer → Database Layer → Analytics Layer → Web UI
 - `analytics_v2.py` - SQL-based metrics calculation
 - `app_v2.py` - Flask web application and REST API
 - `incident_v2.py` - Data transfer object (pure data class)
+- `test folder` - All the unit test cases
 
 ### Critical Design Patterns
 
@@ -100,7 +101,7 @@ Service IDs are extracted from URLs using regex pattern: `/([A-Z0-9]{7})$/`
 - Custom calendar grid with escalation popups
 
 ## Development Patterns 
-Make sure when you add features, make according changes to the test cases and README file. Run the tests and fix the failure ones. 
+Make sure when you add features, make according changes to the unit test cases and README file. Run the unit tests cases and fix the failure ones. 
 Don't overwelming the README, just add major features and make it concise. 
 
 ### Error Handling

@@ -378,8 +378,6 @@ def update_service_date_command(service_id: str, date_str: str):
 
 
 def main():
-    print("Hello Claude")
-    
     # Setup signal handlers first
     setup_signal_handlers()
     
