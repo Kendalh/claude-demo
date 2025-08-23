@@ -333,7 +333,8 @@ class PagerDutyAPIClient:
         
         # Process custom fields
         custom_fields = custom_fields or {}
-        resolved_by_ccoe = custom_fields.get('resolution').lower() == 'ccoe'
+        resolution = custom_fields.get('resolution')
+        resolved_by_ccoe = resolution and resolution.lower() == 'ccoe'
         caused_by_infra = custom_fields.get('prelim_root_cause')
         
         return Incident(

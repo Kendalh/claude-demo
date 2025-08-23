@@ -82,3 +82,4 @@ update_log.txt
 # API keys and secrets
 ANTHROPIC_KEY
 *.pem
+claude.local.md
